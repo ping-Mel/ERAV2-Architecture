@@ -6,6 +6,11 @@ from torchvision import datasets
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from tqdm import tqdm
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from torchvision import transforms
+from .CIFAR10Albumentations import CIFAR10Albumentations
+
 
 def initialize_device(seed=1):
     use_cuda = torch.cuda.is_available()
@@ -14,6 +19,39 @@ def initialize_device(seed=1):
     if use_cuda:
         torch.cuda.manual_seed(seed)
     return torch.device("cuda" if use_cuda else "cpu"), use_cuda
+
+def get_training_transforms():
+    mean_dataset = [0.4914 * 255, 0.4822 * 255, 0.4465 * 255]
+    train_transforms = A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=45, p=0.5),
+        A.CoarseDropout(max_holes=1, max_height=16, max_width=16, min_holes=1, min_height=16, min_width=16, fill_value=mean_dataset, p=0.5),
+        A.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.247, 0.243, 0.261]),
+        ToTensorV2()
+    ])
+    return train_transforms
+
+def setup_dataloaders(batch_size=64, num_workers=4, pin_memory=True):
+    train_transforms = get_training_transforms()
+    train_dataset = CIFAR10Albumentations(root='./data', train=True, transform=train_transforms)
+    
+    test_transforms = get_testing_transforms()
+    test_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=test_transforms)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
+
+    return train_loader, test_loader
+
+def get_testing_transforms():
+    test_transforms = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.247, 0.243, 0.261])
+    ])
+    return test_transforms
+
+
+
 
 def get_dataloader_args(use_cuda, batch_size=256):
     return dict(shuffle=True, batch_size=batch_size if use_cuda else 128, num_workers=4, pin_memory=True) if use_cuda else dict(shuffle=True, batch_size=128)

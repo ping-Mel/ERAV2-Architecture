@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="ERA_V2_Architecture",
-    version="0.1.5",
+    version="0.1.7",
     author="Xianping Wu",
     author_email="xianpingwu@hotmail.com",
     description="The ERA-V2 course network architectures",

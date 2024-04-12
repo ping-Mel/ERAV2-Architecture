@@ -1,4 +1,7 @@
 from torchvision import datasets
+from torch.utils.data import Dataset
+import numpy as np
+
 class CIFAR10Albumentations:
     def __init__(self, root='./data', train=True, transform=None):
         self.data = datasets.CIFAR10(root, train=train, download=True)
