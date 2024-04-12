@@ -11,6 +11,15 @@ from albumentations.pytorch import ToTensorV2
 from torchvision import transforms
 from .CIFAR10Albumentations import CIFAR10Albumentations
 
+train_losses = []
+test_losses = []
+train_acc = []
+test_acc = []
+
+failed_samples = []
+grad_cam_samples = []
+
+
 
 def initialize_device(seed=1):
     use_cuda = torch.cuda.is_available()
@@ -66,12 +75,14 @@ def train(model, device, train_loader, optimizer, epoch):
         optimizer.zero_grad()
         y_pred = model(data)
         loss = F.nll_loss(y_pred, target)
+        train_losses.append(loss)
         loss.backward()
         optimizer.step()
         pred = y_pred.argmax(dim=1, keepdim=True)
         correct += pred.eq(target.view_as(pred)).sum().item()
         processed += len(data)
         pbar.set_description(f'Loss={loss.item()} Batch_id={batch_idx} Accuracy={100*correct/processed:0.2f}%')
+        train_acc.append(100*correct/processed)
 
 def test(model, device, test_loader):
     model.eval()
@@ -84,10 +95,34 @@ def test(model, device, test_loader):
             test_loss += F.nll_loss(output, target, reduction='sum').item()
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
+
+              # New code block to check for incorrect predictions
+            matches = pred.eq(target.view_as(pred))
+            for idx, match in enumerate(matches):
+                if not match.item():
+                    failed_samples.append((data[idx], target[idx].item(), pred[idx].item()))
+                    #grad_cam = GradCAM(model, 'layer4')
+                    #heatmap = grad_cam.generate_heatmap(data[idx].unsqueeze(0), pred[idx].item())
+                    #grad_cam_samples.append((heatmap, target[idx].item(), pred[idx].item()))
+
     test_loss /= len(test_loader.dataset)
+    test_losses.append(test_loss)
     print(f'\nTest set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(test_loader.dataset)} ({100. * correct / len(test_loader.dataset):.2f}%)\n')
+    test_acc.append(100. * correct / len(test_loader.dataset))
 
 def show_images(failed_samples, title):
+    CIFAR10_CLS = {
+        0: 'Airplane',
+        1: 'Automobile',
+        2: 'Bird',
+        3: 'Cat',
+        4: 'Deer',
+        5: 'Dog',
+        6: 'Frog',
+        7: 'Horse',
+        8: 'Ship',
+        9: 'Truck'
+        }
     fig, axs = plt.subplots(5, 2, figsize=(8, 10))
     fig.suptitle(title, fontsize=16)
     for idx, (img, actual, pred) in enumerate(failed_samples[:10]):
@@ -95,7 +130,10 @@ def show_images(failed_samples, title):
         img = img.cpu().numpy().transpose((1, 2, 0))
         img = (img - img.min()) / (img.max() - img.min())
         ax.imshow(img, interpolation='none')
-        ax.set_title(f'Actual: {actual}, Pred: {pred}')
+        ax.set_title(f'Actual: {CIFAR10_CLS[actual]}, Pred: {CIFAR10_CLS[pred]}')
         ax.axis('off')
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
+
+def get_training_stats():
+    return train_losses,test_losses,train_acc,test_acc,failed_samples
